@@ -1,0 +1,12 @@
+{
+  "host": "*",
+  "port": 12345,
+  "users": 
+  {
+    "admin": "CHANGE_THIS"
+  },
+  "projects": {
+      "MyCoolWindowsProject": "D:/myfolder",
+      "MyCoolLinuxProject": "/home/myuser/myfolder"
+  }
+}

@@ -1,0 +1,4 @@
+entangle-python
+GPUtil
+cefpython3==66.0
+pyte
