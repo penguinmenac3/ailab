@@ -5,6 +5,7 @@
   {
     "admin": "CHANGE_THIS"
   },
+  "workspace": "/home/myuser/workspace",
   "projects": {
       "MyCoolWindowsProject": "D:/myfolder",
       "MyCoolLinuxProject": "/home/myuser/myfolder"

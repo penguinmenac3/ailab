@@ -39,6 +39,7 @@ A config file must contain a host or * for any interface, a port, a list of user
   {
     "admin": "CHANGE_THIS"
   },
+  "workspace": "/home/myuser/workspace",
   "projects": {
       "MyCoolWindowsProject": "D:/myfolder",
       "MyCoolLinuxProject": "/home/myuser/myfolder"
