@@ -3,6 +3,7 @@ import traceback
 import datetime
 import signal
 import subprocess
+import json
 from time import sleep, time, strftime, gmtime
 from threading import Thread
 from functools import partial
@@ -13,8 +14,9 @@ TICKRATE = 0.1
 
 
 class Server(object):
-    def __init__(self, config):
+    def __init__(self, config, config_path):
         self.config = config
+        self.config_path = config_path
         self.gpu_free = False
         self.running = True
         self.current_task = None
@@ -40,6 +42,7 @@ class Server(object):
         self.username = entanglement.username
         print(self.username)
         entanglement.set_experiment = partial(self.set_experiment, state, entanglement)
+        entanglement.add_experiment = partial(self.add_experiment, state, entanglement)
         entanglement.save_file = partial(self.save_file, state, entanglement)
         entanglement.open_file = partial(self.open_file, state, entanglement)
         entanglement.get_files = partial(self.get_files, state, entanglement)
@@ -82,7 +85,7 @@ class Server(object):
             execProcess.feed(inp)
         else:
             print("Tried to write to non existent process.")
-        
+
     def resize_term(self, state, entanglement, lines, columns):
         project = state["experiment"]
         state["term_height"] = lines
@@ -91,7 +94,7 @@ class Server(object):
             for process_id in self.processes[project]:
                 execProcess = self.processes[project][process_id]
                 execProcess.resize(lines, columns)
-        
+
     def create_term(self, state, entanglement):
         self.create_term_with_cmd(state, entanglement, None)
 
@@ -127,6 +130,15 @@ class Server(object):
         if name in self.terminals:
             for execProcess in self.terminals[name]:
                 entanglement.remote_fun("update_terminal")(name, execProcess.pid, self.terminals[name][execProcess])
+
+    def add_experiment(self, state, entanglement, name, path):
+        path = os.path.join(self.config["workspace"], path).replace("\\", "/")
+        os.makedirs(path, exist_ok=True)
+        self.config["projects"][name] = path
+        config_str = json.dumps(self.config, indent=4, sort_keys=True)
+        with open(self.config_path, "w") as f:
+            f.write(config_str)
+        entanglement.remote_fun("update_experiment")(name, "ready")
 
     def get_files(self, state, entanglement):
         filelist = []
@@ -172,7 +184,7 @@ class Server(object):
             content = "Error reading file"
         entanglement.remote_fun("update_file")({"name": name, "content": content, "type": filetype})
         self.lint(state, entanglement, name)
-        
+
     def lint(self, state, entanglement, name):
         file = os.path.join(self.config["projects"][state["experiment"]], name)
         linter_result = "TODO linter not implemented."
@@ -182,7 +194,7 @@ class Server(object):
         if self.gpu_free != state["gpu_free"]:
             state["gpu_free"] = self.gpu_free
             entanglement.remote_fun("update_server_status")("idle" if self.gpu_free else "busy")
-        
+
         project = state["experiment"]
         if project is not None and project in self.terminals:
             for execProcess in self.terminals[project]:

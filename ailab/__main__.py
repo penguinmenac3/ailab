@@ -11,7 +11,7 @@ def run_server(config_path):
     with open(config_path, "r") as f:
         config = json.loads(f.read())
 
-    server = Server(config)
+    server = Server(config, config_path)
 
     # Listen for entanglements (listenes in blocking mode)
     entangle.listen(host=config["host"], port=config["port"], users=config["users"], callback=server.on_entangle)
