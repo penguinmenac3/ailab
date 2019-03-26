@@ -1,5 +1,9 @@
 config
 __pycache__
 exceptions.log
+events.log
 .vscode
 *.pyc
+build
+dist
+*.egg-info
