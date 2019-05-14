@@ -1,4 +1,5 @@
 entangle-python
 GPUtil
+psutil
 cefpython3==66.0
 pyte

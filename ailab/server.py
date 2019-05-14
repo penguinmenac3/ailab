@@ -7,35 +7,39 @@ import json
 from time import sleep, time, strftime, gmtime
 from threading import Thread
 from functools import partial
-import GPUtil as GPU
+import GPUtil
+import psutil
 from ailab.terminal_emulator import open_terminal
 
 TICKRATE = 0.1
+PYTHON_IGNORE_LIST = ["__pycache__", "*.pyc", ".ipynb_checkpoints", ".git"]
 
 
 class Server(object):
     def __init__(self, config, config_path):
         self.config = config
         self.config_path = config_path
-        self.gpu_free = False
+        self.server_load = {"cpu": 0, "ram": 0, "gpus": []}
         self.running = True
         self.current_task = None
         self.username = None
         self.terminals = {}
         self.processes = {}
         self.update_terminals = []
+        self.ignore_list = PYTHON_IGNORE_LIST
         Thread(target=self.run).start()
 
     def run(self):
         while self.running:
-            gpu_free = True if self.current_task is None else False
-            if gpu_free:
-                gpu_free = len(GPU.getAvailable(order='memory', limit=999, maxMemory=0.2, maxLoad=0.3)) > 0
-            self.gpu_free = gpu_free
-            sleep(10)
+            cpu = int(psutil.cpu_percent() * 10) / 10
+            ram = int(psutil.virtual_memory().percent * 10) / 10
+            gpus = [{"id": gpu.id, "GPU": int(gpu.load * 1000) / 10, "MEM": int(gpu.memoryUtil * 1000) / 10}
+                    for gpu in GPUtil.getGPUs()]
+            self.server_load = {"cpu": cpu, "ram": ram, "gpus": gpus}
+            sleep(2)
 
     def setup(self, state, entanglement):
-        state["gpu_free"] = True
+        state["server_load"] = None
         state["experiment"] = None
         state["term_height"] = 80
         state["term_width"] = 24
@@ -118,7 +122,7 @@ class Server(object):
                 del self.terminals[project][execProcess]
             else:
                 print("execProcess does not exist in terminals")
-            #print("process killed {}".format(execProcess.returncode))
+            # print("process killed {}".format(execProcess.returncode))
             entanglement.remote_fun("update_terminal")(project, execProcess.pid, None)
 
     def set_experiment(self, state, entanglement, name):
@@ -140,16 +144,33 @@ class Server(object):
             f.write(config_str)
         entanglement.remote_fun("update_experiment")(name, "ready")
 
+    def __ignore(self, candidate, forbidden_list):
+        # Parse list to find simple placeholder notations
+        start_list = []
+        end_list = []
+        for item in forbidden_list:
+            if item.startswith("*"):
+                end_list.append(item.replace("*", ""))
+            if item.endswith("*"):
+                start_list.append(item.replace("*", ""))
+        # Test
+        res = candidate in forbidden_list
+        for item in start_list:
+            res |= candidate.startswith(item)
+        for item in end_list:
+            res |= candidate.endswith(item)
+        return res
+
     def get_files(self, state, entanglement):
         filelist = []
         if state["experiment"] is None:
             return
         for path, subdirs, files in os.walk(self.config["projects"][state["experiment"]]):
+            files = [x for x in files if not self.__ignore(x, self.ignore_list)]
+            subdirs[:] = [x for x in subdirs if not self.__ignore(x, self.ignore_list)]
             for name in files:
                 file = os.path.join(path, name)
                 file = file.replace("\\", "/")
-                if "__pycache__" in file or ".git/" in file or file.endswith(".pyc"):
-                    continue
                 file = file.replace(self.config["projects"][state["experiment"]], ".")
                 filelist.append(file)
         entanglement.remote_fun("update_files")(filelist)
@@ -191,9 +212,9 @@ class Server(object):
         entanglement.remote_fun("update_linter")({"name": name, "content": linter_result})
 
     def tick(self, state, entanglement):
-        if self.gpu_free != state["gpu_free"]:
-            state["gpu_free"] = self.gpu_free
-            entanglement.remote_fun("update_server_status")("idle" if self.gpu_free else "busy")
+        if self.server_load != state["server_load"]:
+            state["server_load"] = self.server_load
+            entanglement.remote_fun("update_server_status")(self.server_load)
 
         project = state["experiment"]
         if project is not None and project in self.terminals:
