@@ -232,6 +232,14 @@ class Server(object):
 
     def on_entangle(self, entanglement):
         state = {}
+        # Read experiments automatically?
+        if "auto_projects" in self.config and self.config["auto_projects"]:
+            folders = [os.path.join(self.config["workspace"], f) for f in os.listdir(self.config["workspace"])]
+            folders = [f for f in folders if os.path.isdir(f)]
+            names = [f.split(os.sep)[-1].replace("-", " ").replace("_", " ") for f in folders]
+            self.config["projects"] = dict(zip(names, folders))
+            print("Automatically detected projects: {}".format(self.config["projects"]))
+
         self.setup(state, entanglement)
         try:
             while True:
