@@ -25,6 +25,7 @@ setup(
     url='https://github.com/penguinmenac3/ailab-server',
     download_url='https://github.com/penguinmenac3/ailab-server/tarball/' + __version__,
     license='BSD',
+    long_description_content_type="text/markdown",
     classifiers=[
         'Development Status :: 3 - Alpha',
         'Intended Audience :: Developers',
