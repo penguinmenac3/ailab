@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 from codecs import open
 from os import path
 
-__version__ = '0.0.4'
+__version__ = '0.0.5'
 
 here = path.abspath(path.dirname(__file__))
 
@@ -26,9 +26,9 @@ setup(
     download_url='https://github.com/penguinmenac3/ailab-server/tarball/' + __version__,
     license='BSD',
     classifiers=[
-      'Development Status :: 3 - Alpha',
-      'Intended Audience :: Developers',
-      'Programming Language :: Python',
+        'Development Status :: 3 - Alpha',
+        'Intended Audience :: Developers',
+        'Programming Language :: Python',
     ],
     keywords='',
     packages=find_packages(exclude=['examples', 'config', 'scripts', 'docs', 'tests*']),
