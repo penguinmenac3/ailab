@@ -102,3 +102,23 @@ class DataTransformer(object):
 
     def __getitem__(self, index):
         return self.transform_data(*self.data_provider[index])
+
+
+class DataProviderPipeline(object):
+    def __init__(self, *args):
+        self.steps = list(args)
+
+    def add_step(self, step):
+        self.steps.append(step)
+
+    def __call__(self, config, phase, augmentation_fn=None):
+        tmp = None
+        for step in self.steps:
+            if tmp is None:
+                tmp = step(config, phase)
+            else:
+                tmp = step(config, tmp)
+        if augmentation_fn is not None:
+            tmp = DataTransformer(config, tmp)
+            tmp.transform_data = augmentation_fn
+        return tmp

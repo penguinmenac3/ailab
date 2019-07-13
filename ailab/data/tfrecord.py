@@ -41,17 +41,17 @@ def _bytes_feature(value):
 
 
 def _write_tf_record_pool_helper(args):
-    hyperparams, dataset, num_threads, i, record_filename, iterator_mode = args
+    config, dataset, num_threads, i, record_filename, iterator_mode = args
     thread_name = "%s:thread_%d" % (record_filename, i)
-    _write_tf_record(hyperparams, dataset, num_threads, i, record_filename, thread_name=thread_name, iterator_mode=iterator_mode)
+    _write_tf_record(config, dataset, num_threads, i, record_filename, thread_name=thread_name, iterator_mode=iterator_mode)
 
 
-def _write_tf_record(hyperparams, dataset, num_threads, i, record_filename, thread_name="thread", iterator_mode=False):
+def _write_tf_record(config, dataset, num_threads, i, record_filename, thread_name="thread", iterator_mode=False):
     writer = tf.io.TFRecordWriter(record_filename)
 
     samples_written = 0
     if iterator_mode:
-        chunk_size = int(hyperparams.problem.num_samples / hyperparams.train.batch_size)
+        chunk_size = int(config.problem.num_samples / config.train.batch_size)
     else:
         chunk_size = int(len(dataset) / num_threads)
     offset = i * chunk_size
@@ -80,12 +80,12 @@ def _write_tf_record(hyperparams, dataset, num_threads, i, record_filename, thre
     writer.close()
 
 
-def _read_tf_record(record_filename, config):
+def _read_tf_record(record_filename, data_config):
     reader = tf.TFRecordReader()
     _, serialized_example = reader.read(record_filename)
 
     feature_dict = {}
-    for k in config.keys():
+    for k in data_config.keys():
         if "feature_" in k or "label_" in k:
             feature_dict[k] = tf.FixedLenFeature([], tf.string)
 
@@ -95,8 +95,8 @@ def _read_tf_record(record_filename, config):
 
     outputs = {}
     for k in feature_dict.keys():
-        feature_shape = config[k]["shape"]
-        feature_type = np.dtype(config[k]["dtype"])
+        feature_shape = data_config[k]["shape"]
+        feature_type = np.dtype(data_config[k]["dtype"])
         feature = tf.decode_raw(data[k], feature_type)
         feature_len = 1
         for x in list(feature_shape):
@@ -107,10 +107,10 @@ def _read_tf_record(record_filename, config):
     return outputs
 
 
-def _create_parser_fn(config, phase):
+def _create_parser_fn(data_config, phase):
     def parser_fn(serialized_example):
         tensor_dict = {}
-        for k in config.keys():
+        for k in data_config.keys():
             if "feature_" in k or "label_" in k:
                 tensor_dict[k] = tf.io.FixedLenFeature([], tf.string)
 
@@ -120,8 +120,8 @@ def _create_parser_fn(config, phase):
 
         outputs = {}
         for k in tensor_dict.keys():
-            tensor_shape = config[k]["shape"]
-            tensor_type = np.dtype(config[k]["dtype"])
+            tensor_shape = data_config[k]["shape"]
+            tensor_type = np.dtype(data_config[k]["dtype"])
             tensor = tf.io.decode_raw(data[k], tensor_type)
             tensor_len = 1
             for x in list(tensor_shape):
@@ -132,7 +132,7 @@ def _create_parser_fn(config, phase):
         features = {}
         labels = {}
         for k in outputs.keys():
-            shape = tuple(list(config[k]["shape"]))
+            shape = tuple(list(data_config[k]["shape"]))
             tensor = tf.reshape(outputs[k], shape, name="input/" + phase + "/" + k + "_reshape")
             if "feature_" in k:
                 features["_".join(k.split("_")[1:])] = tensor
@@ -156,8 +156,8 @@ def _read_data(prefix, batch_size, augmentation=None, repeat=True, subset=None):
     prefix = prefix.replace("\\", "/")
     folder = "/".join(prefix.split("/")[:-1])
     phase = prefix.split("/")[-1]
-    config = json.load(open(prefix + '_config.json'))
-    num_threads = config["num_threads"]
+    data_config = json.load(open(prefix + '_config.json'))
+    num_threads = data_config["num_threads"]
 
     filenames = [folder + "/" + f for f in listdir(folder) if isfile(join(folder, f))
                  and phase in f and not "config.json" in f]
@@ -169,7 +169,7 @@ def _read_data(prefix, batch_size, augmentation=None, repeat=True, subset=None):
     dataset = dataset.shuffle(buffer_size=10 * batch_size)
     if repeat:
         dataset = dataset.repeat()
-    dataset = dataset.map(map_func=_create_parser_fn(config, phase), num_parallel_calls=num_threads)
+    dataset = dataset.map(map_func=_create_parser_fn(data_config, phase), num_parallel_calls=num_threads)
     if augmentation is not None:
         dataset = dataset.map(map_func=augmentation, num_parallel_calls=num_threads)
     dataset = dataset.batch(batch_size=batch_size)
@@ -194,11 +194,11 @@ def create_input_fn(config, phase, augmentation_fn=None, repeat=True, subset=Non
     prefix = prefix.replace("\\", "/")
     folder = "/".join(prefix.split("/")[:-1])
     phase = prefix.split("/")[-1]
-    config = json.load(open(prefix + '_config.json'))
+    data_config = json.load(open(prefix + '_config.json'))
 
     def input_fn():
         return _read_data(prefix, config.train.batch_size, augmentation_fn, repeat=repeat, subset=subset)
-    return input_fn, config["num_samples"]
+    return input_fn, data_config["num_samples"]
 
 
 def write_data(config,
@@ -210,7 +210,7 @@ def write_data(config,
     """
     Write a tf record containing a feature dict and a label dict.
 
-    :param hyperparams: The hyper parameters required for writing hyperparams.problem.tf_records_path: str. In case your sequence is an iterator and not a list interface hyperparams.problem.num_samples: int and hyperparams.train.batch_size: int is required
+    :param config: The hyper parameters required for writing config.problem.tf_records_path: str. In case your sequence is an iterator and not a list interface config.problem.num_samples: int and config.train.batch_size: int is required
     :param mode: The mode specifies the purpose of the data. Typically it is either "train", "val", "trainval" or "test".
     :param dataset: Your actual data as a tf.keras.utils.sequence, a tf.data.Dataset, a generator or a list.
     :param num_record_files: The number of threads. If you use trainval mode 10 is nice because it gives you the ability to have even cross validation splits at 10% steps.
@@ -222,7 +222,7 @@ def write_data(config,
     if not os.path.exists(config.problem.tf_records_path):
         os.makedirs(config.problem.tf_records_path)
     outp_dir = os.path.join(config.problem.tf_records_path, "src")    
-    if not needs_backup(outp_dir):
+    if needs_backup(outp_dir):
         backup(outp_dir)
     
     num_threads = max(num_threads, num_record_files)
@@ -238,7 +238,7 @@ def write_data(config,
 
     if iterator_mode:
         if config.problem.get("num_samples", None) is None or config.train.get("batch_size", None) is None:
-            raise RuntimeError("The hyperparams must specify  hyperparams.problem.num_samples and hyperparams.train.batch_size in iterator mode.")
+            raise RuntimeError("The config must specify  config.problem.num_samples and config.train.batch_size in iterator mode.")
     prefix = os.path.join(config.problem.tf_records_path, phase)
     prefix = prefix.replace("\\", "/")
     data_tmp_folder = "/".join(prefix.split("/")[:-1])
@@ -254,14 +254,14 @@ def write_data(config,
     else:
         sample_feature, sample_label = dataset[0]
 
-    config = {"num_threads": num_record_files, "num_samples": len(dataset)}
+    data_config = {"num_threads": num_record_files, "num_samples": len(dataset)}
     for k in sample_feature.keys():
-        config["feature_" + k] = {"shape": sample_feature[k].shape[1:], "dtype": sample_feature[k].dtype.name}
+        data_config["feature_" + k] = {"shape": sample_feature[k].shape[1:], "dtype": sample_feature[k].dtype.name}
     for k in sample_label.keys():
-        config["label_" + k] = {"shape": sample_label[k].shape[1:], "dtype": sample_label[k].dtype.name}
+        data_config["label_" + k] = {"shape": sample_label[k].shape[1:], "dtype": sample_label[k].dtype.name}
 
     with open(prefix + '_config.json', 'w') as outfile:
-        json.dump(config, outfile)
+        json.dump(data_config, outfile)
 
     if iterator_mode or not multi_processing:
         for arg in args:
@@ -269,3 +269,48 @@ def write_data(config,
     else:
         pool = Pool(processes=num_threads)
         pool.map(_write_tf_record_pool_helper, args)
+
+    return True
+
+def auto_setup_data(config, training_data=None, validation_data=None):
+    if training_data is None and validation_data is None:
+        augment_train = None
+        augment_test = None
+        if "augment" in config.arch.__dict__:
+            augment = config.arch.augment()
+            augment_train = augment.train
+            augment_test = augment.test
+
+        # Check if data is up to date
+        outp_dir = os.path.join(config.problem.tf_records_path, "src")
+        needs_update = False
+        if needs_backup(outp_dir):
+            needs_update = True
+
+        # If data is not up to date or records should not be used load dataprovider
+        if config.problem.tf_records_path is None or needs_update:
+            prepare = config.arch.prepare
+            training_data = prepare(config, PHASE_TRAIN, augmentation_fn=augment_train)
+            training_samples = len(training_data) * config.train.batch_size
+            validation_data = prepare(config, PHASE_VALIDATION, augmentation_fn=augment_train)
+            validation_samples = len(validation_data) * config.train.batch_size
+
+        # Load the record dataset and update it if required.
+        if config.problem.tf_records_path is not None:  # Use tfrecords buffer
+            tmp = config.train.batch_size
+            config.train.batch_size = 1
+
+            # When the training data is written, also update the validation data.
+            if needs_update:
+                write_data(config, PHASE_TRAIN, training_data)
+                write_data(config, PHASE_VALIDATION, validation_data)
+            config.train.batch_size = tmp
+
+            training_data, training_samples = create_input_fn(
+                config, PHASE_TRAIN, augmentation_fn=augment_train, repeat=False)
+            training_data = training_data()
+            validation_data, validation_samples = create_input_fn(
+                config, PHASE_VALIDATION, augmentation_fn=augment_test, repeat=False)
+            validation_data = validation_data()
+
+    return training_data, training_samples, validation_data, validation_samples

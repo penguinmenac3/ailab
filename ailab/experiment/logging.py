@@ -58,7 +58,6 @@ def _get_backup_path(fname, outp_dir=None):
 
 def _copyfile(src, dst, follow_symlinks=True, create_missing_dirs=True):
     dst_dir = os.path.dirname(dst)
-    print(dst_dir)
     if not os.path.exists(dst_dir):
         os.makedirs(dst_dir)
 
@@ -74,6 +73,8 @@ def backup(outp_dir, forbidden_list=[]):
         _copyfile(f, f_backup)
 
 def needs_backup(outp_dir, forbidden_list=[]):
+    if not os.path.exists(outp_dir):
+        return True
     forbidden_list.extend(PYTHON_IGNORE_LIST)
     loaded_files = _get_loaded_files(forbidden_list=forbidden_list)
     
@@ -81,6 +82,33 @@ def needs_backup(outp_dir, forbidden_list=[]):
         f_backup = _get_backup_path(f, outp_dir=outp_dir)
         # Check if data is already up to date
         if not os.path.exists(f_backup) or not filecmp.cmp(f, f_backup):
-            return False
+            return True
 
-    return True
+    return False
+
+def setup_logging(config, continue_with_specific_checkpointpath=False, continue_training=False):
+    time_stamp = datetime.datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d_%H.%M.%S')
+    chkpt_path = config.train.checkpoint_path + "/" + time_stamp
+    chkpt_path = chkpt_path + "_" + config.train.experiment_name
+
+    if continue_with_specific_checkpointpath:
+        chkpt_path = config.train.checkpoint_path + "/" + continue_with_specific_checkpointpath
+        print("Continue with checkpoint: {}".format(chkpt_path))
+    elif continue_training:
+        chkpts = sorted([name for name in os.listdir(config.train.checkpoint_path)])
+        chkpt_path = config.train.checkpoint_path + "/" + chkpts[-1]
+        print("Latest found checkpoint: {}".format(chkpt_path))
+
+    if not os.path.exists(chkpt_path + "/train"):
+        os.makedirs(chkpt_path + "/train")
+    if not os.path.exists(chkpt_path + "/val"):
+        os.makedirs(chkpt_path + "/val")
+    if not os.path.exists(chkpt_path + "/checkpoints"):
+        os.makedirs(chkpt_path + "/checkpoints")
+    if not os.path.exists(chkpt_path + "/logs"):
+        os.makedirs(chkpt_path + "/logs")
+    if not os.path.exists(chkpt_path + "/images"):
+        os.makedirs(chkpt_path + "/images")
+
+    backup(os.path.join(chkpt_path, "src"))
+    return chkpt_path

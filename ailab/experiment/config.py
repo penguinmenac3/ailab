@@ -25,12 +25,9 @@ import json
 from importlib import import_module
 import inspect
 
+import ailab
+
 _sentinel = object()
-
-
-def __has_attribute(self, name):
-    return name in self.__dict__ and self.__dict__[name] is not None
-
 
 def import_config(config_file):
     """
@@ -170,31 +167,37 @@ class Config(ConfigPart):
     def __repr__(self):
         return "Config(" + self.__str__() + ")"
 
+    @staticmethod    
+    def __has_attribute(self, name):
+        return name in self.__dict__ and self.__dict__[name] is not None
+
     def check_completness(self):
         # Check for training parameters
-        assert __has_attribute(self, "train")
-        assert __has_attribute(self.train, "experiment_name")
-        assert __has_attribute(self.train, "checkpoint_path")
-        assert __has_attribute(self.train, "batch_size")
-        assert __has_attribute(self.train, "epochs")
+        assert Config.__has_attribute(self, "train")
+        assert Config.__has_attribute(self.train, "experiment_name")
+        assert Config.__has_attribute(self.train, "checkpoint_path")
+        assert Config.__has_attribute(self.train, "batch_size")
+        assert Config.__has_attribute(self.train, "epochs")
         
-        assert __has_attribute(self.train, "optimizer")
-        assert __has_attribute(self.train.optimizer, "type")
+        assert Config.__has_attribute(self.train, "optimizer")
+        assert Config.__has_attribute(self.train.optimizer, "type")
         
-        assert __has_attribute(self.train, "learning_rate")
-        assert __has_attribute(self.train.learning_rate, "type")
-        assert __has_attribute(self.train.learning_rate, "start_value")
+        assert Config.__has_attribute(self.train, "learning_rate")
+        assert Config.__has_attribute(self.train.learning_rate, "type")
+        assert Config.__has_attribute(self.train.learning_rate, "start_value")
         if self.train.learning_rate.type == "exponential":
-            assert __has_attribute(self.train.learning_rate, "end_value")
+            assert Config.__has_attribute(self.train.learning_rate, "end_value")
 
-        assert __has_attribute(self, "arch")
-        assert __has_attribute(self.arch, "model")
-        assert __has_attribute(self.arch, "loss")
-        assert __has_attribute(self.arch, "metrics")
-        assert __has_attribute(self.arch, "prepare")
+        assert Config.__has_attribute(self, "arch")
+        assert Config.__has_attribute(self.arch, "model")
+        assert Config.__has_attribute(self.arch, "loss")
+        assert Config.__has_attribute(self.arch, "metrics")
+        assert Config.__has_attribute(self.arch, "prepare")
 
-        assert __has_attribute(self, "problem")
-        assert __has_attribute(self.problem, "base_dir")
+        assert Config.__has_attribute(self, "problem")
+        assert Config.__has_attribute(self.problem, "base_dir")
+
+        ailab.config = self
 
     def dynamic_import(self, obj):
         print("WARNING: Using this is highly discouraged. Import via normal python code instead.")
