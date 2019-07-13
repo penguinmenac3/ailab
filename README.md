@@ -1,32 +1,38 @@
-# AI Lab Server
+# AI Lab
 
-The server backend for AI Lab.
-AI Lab consists of a ui and a server.
-Since the ui is a static website that works on your local webbrowser no installation is needed. Just open [TODO](#)
+AI Lab tries to make developing neural networks easier. It is written with the major frameworks keras, tensorflow 2 and pytorch 1 in mind.
 
-## Capabilities
+Whilst the implementation of the model and training loop differ a lot between the frameworks, there is some common ground:
+1. Loading an preparing the data
+2. Experiment management (multiple configurations, training servers)
+3. Visualization
 
-AI Lab is a tool that let's you manage multiple projects on local and remote machines.
-You can see experiments and their status as well as the server states on the front page.
+Details on what is common here will be explained after a short installation instruction.
 
-Once you selected a project, you can browse the files and edit them.
-You can see recent events of this project.
-And of course you can run python and shell files in a terminal as well as just use a terminal on the machine starting in the project folder.
+## Installation
 
-## Install Server
-
-Installation can be done via pip.
+First install [keras](), [tensorflow]() or [pytorch]() according to their instructions.
+After that simply pip install this package.
 
 ```bash
 pip install ailab
 ```
 
-## Run Server
+## 1. Loading and preparing the data
+
+
+## 2. Experiment management
+
+
+## 3. Visualization
+
+AI Lab Visualization consists of a ui and a server.
+Since the ui is a static website that works on your local webbrowser no installation is needed. The static website is hosted [here](http://ailab.f-online.net/).
 
 Running is as simple as running the module in python providing a path to a config file.
 
 ```bash
-python -m ailab my_config.json
+python -m ailab.visualization my_config.json
 ```
 
 A config file must contain a host or * for any interface, a port, a list of users as a map and a list of projects as a map of name to folder.
@@ -47,7 +53,7 @@ A config file must contain a host or * for any interface, a port, a list of user
 }
 ```
 
-## Privacy
+### Privacy
 
 All connection data is stored locally in your webbrowser and nothing is transmitted to the host of ailab ui.
 There is only direct communication between your webbroser and the server you add via the "Add Server" Dialog.
