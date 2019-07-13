@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 from codecs import open
 from os import path
 
-__version__ = '0.0.5'
+__version__ = '1.0.0'
 
 here = path.abspath(path.dirname(__file__))
 
@@ -22,8 +22,8 @@ setup(
     version=__version__,
     description='An environment to manage all your running ai experiments across multiple computers.',
     long_description=long_description,
-    url='https://github.com/penguinmenac3/ailab-server',
-    download_url='https://github.com/penguinmenac3/ailab-server/tarball/' + __version__,
+    url='https://github.com/penguinmenac3/ailab',
+    download_url='https://github.com/penguinmenac3/ailab/tarball/' + __version__,
     license='BSD',
     long_description_content_type="text/markdown",
     classifiers=[

@@ -1,7 +1,7 @@
 import entangle
 import json
 import datetime
-from ailab.server import Server
+from ailab.ui.server import Server
 
 
 def run_server(config_path):

@@ -9,7 +9,7 @@ from threading import Thread
 from functools import partial
 import GPUtil
 import psutil
-from ailab.terminal_emulator import open_terminal
+from ailab.ui.terminal_emulator import open_terminal
 
 TICKRATE = 0.1
 PYTHON_IGNORE_LIST = ["__pycache__", "*.pyc", ".ipynb_checkpoints", ".git"]

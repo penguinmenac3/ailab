@@ -21,10 +21,26 @@
 # SOFTWARE.
 
 
-PHASE_TRAIN = "train"
-PHASE_VALIDATION = "val"
-PHASE_TRAINVAL = "trainval"
-PHASE_TEST = "test"
+from abc import ABC, abstractmethod
 
-NO_CONFIG = object()
-config = None
+
+class ClassDecorator(ABC):
+    def __get__(self, obj, objtype):
+        """Support instance methods."""
+        import functools
+        return functools.partial(self.__call__, obj)
+
+    @abstractmethod
+    def __call__(self, *args, **kwargs):
+        pass
+
+
+class RunOnce(ClassDecorator):
+    def __init__(self, f):
+        self.f = f
+        self.called = {}
+
+    def __call__(self, *args, **kwargs):
+        if args[0] not in self.called:
+            self.called[args[0]] = True
+            self.f(*args, **kwargs)
