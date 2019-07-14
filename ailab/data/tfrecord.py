@@ -282,13 +282,14 @@ def auto_setup_data(config, training_data=None, validation_data=None):
             augment_test = augment.test
 
         # Check if data is up to date
-        outp_dir = os.path.join(config.problem.tf_records_path, "src")
         needs_update = False
-        if needs_backup(outp_dir):
-            needs_update = True
+        if config.problem.get("tf_records_path", None) is not None:
+            outp_dir = os.path.join(config.problem.tf_records_path, "src")
+            if needs_backup(outp_dir):
+                needs_update = True
 
         # If data is not up to date or records should not be used load dataprovider
-        if config.problem.tf_records_path is None or needs_update:
+        if config.problem.get("tf_records_path", None) is None or needs_update:
             prepare = config.arch.prepare
             training_data = prepare(config, PHASE_TRAIN, augmentation_fn=augment_train)
             training_samples = len(training_data) * config.train.batch_size
@@ -296,7 +297,7 @@ def auto_setup_data(config, training_data=None, validation_data=None):
             validation_samples = len(validation_data) * config.train.batch_size
 
         # Load the record dataset and update it if required.
-        if config.problem.tf_records_path is not None:  # Use tfrecords buffer
+        if config.problem.get("tf_records_path", None) is not None:  # Use tfrecords buffer
             tmp = config.train.batch_size
             config.train.batch_size = 1
 
