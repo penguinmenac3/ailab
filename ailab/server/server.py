@@ -9,7 +9,7 @@ from threading import Thread
 from functools import partial
 import GPUtil
 import psutil
-from ailab.ui.terminal_emulator import open_terminal
+from ailab.server.terminal_emulator import open_terminal
 from rempy.server import Server as RempyServer
 
 TICKRATE = 0.1
