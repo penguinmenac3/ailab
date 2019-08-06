@@ -10,6 +10,7 @@ from functools import partial
 import GPUtil
 import psutil
 from ailab.ui.terminal_emulator import open_terminal
+from rempy.server import Server as RempyServer
 
 TICKRATE = 0.1
 PYTHON_IGNORE_LIST = ["__pycache__", "*.pyc", ".ipynb_checkpoints", ".git"]
@@ -27,6 +28,7 @@ class Server(object):
         self.processes = {}
         self.update_terminals = []
         self.ignore_list = PYTHON_IGNORE_LIST
+        self.rempy_server = RempyServer()
         Thread(target=self.run).start()
 
     def run(self):
@@ -232,22 +234,26 @@ class Server(object):
 
     def on_entangle(self, entanglement):
         state = {}
-        # Read experiments automatically?
-        if "auto_projects" in self.config and self.config["auto_projects"]:
-            folders = [os.path.join(self.config["workspace"], f) for f in os.listdir(self.config["workspace"])]
-            folders = [f for f in folders if os.path.isdir(f)]
-            names = [f.split(os.sep)[-1].replace("-", " ").replace("_", " ") for f in folders]
-            self.config["projects"] = dict(zip(names, folders))
-            print("Automatically detected projects: {}".format(self.config["projects"]))
+        protocol = entanglement.get("protocol")
+        if protocol == "rempy":
+            self.rempy_server.callback(entanglement)
+        else:
+            # Read experiments automatically?
+            if "auto_projects" in self.config and self.config["auto_projects"]:
+                folders = [os.path.join(self.config["workspace"], f) for f in os.listdir(self.config["workspace"])]
+                folders = [f for f in folders if os.path.isdir(f)]
+                names = [f.split(os.sep)[-1].replace("-", " ").replace("_", " ") for f in folders]
+                self.config["projects"] = dict(zip(names, folders))
+                print("Automatically detected projects: {}".format(self.config["projects"]))
 
-        self.setup(state, entanglement)
-        try:
-            while True:
-                self.tick(state, entanglement)
-                sleep(TICKRATE)
-        except:
-            with open("exceptions.log", "a") as log:
-                log.write("%s: Exception occurred:\n" % datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
-                traceback.print_exc(file=log)
+            self.setup(state, entanglement)
+            try:
+                while True:
+                    self.tick(state, entanglement)
+                    sleep(TICKRATE)
+            except:
+                with open("exceptions.log", "a") as log:
+                    log.write("%s: Exception occurred:\n" % datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+                    traceback.print_exc(file=log)
 
-        entanglement.close()
+            entanglement.close()
