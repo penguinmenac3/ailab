@@ -1,1 +1,1 @@
-from ailab.data.data_provider import DataProvider, DataTransformer, BatchedDataProvider, DataProviderPipeline
+from ailab.data.data_provider import Dataset, TransformedDataset, Transformer, ComposeTransforms
