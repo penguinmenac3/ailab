@@ -1,3 +1,9 @@
+matplotlib
+pillow
+scipy
+scikit-image
+numpy
+rempy
 entangle-python
 GPUtil
 psutil

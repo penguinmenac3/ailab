@@ -5,7 +5,7 @@ AI Lab tries to make developing neural networks easier. It is written with the m
 Whilst the implementation of the model and training loop differ a lot between the frameworks, there is some common ground:
 1. Loading an preparing the data
 2. Experiment management (multiple configurations, training servers)
-3. Visualization
+3. Logging and Visualization
 
 Details on what is common here will be explained after a short installation instruction.
 
@@ -27,11 +27,10 @@ Only the last step - loading it on the gpu - is framework dependant.
 Therefor, a shared dataloading methodology, which is compatible with all frameworks is provided.
 
 ```python
-from ailab.data import DataProvider
+from ailab.data import Dataset
 
-class MyDataset(DataProvider):
-    def __init__(self, config, phase):
-        super().__init__(config, phase)
+class MyDataset(Dataset):
+    def __init__(self):
     
     def __len__(self):
         return 42
@@ -40,17 +39,33 @@ class MyDataset(DataProvider):
         features = {"foo":[1,2,3]}
         labels = {"bar":[3,2,1], "baz": [4,5,6]}
         return features, labels
+
+    def version(self):
+        return 1
 ```
 
-This dataset can then be transformed, batched and converted to the framework. In this case we will use keras.
+This dataset can then be transformed and converted to the framework. In this case we will use keras.
 
 ```python
-from ailab.data import BatchedDataProvider
-from ailab.data.keras import Sequence
+import tensorflow as tf
+from ailab.data import TransformedDataset
+from ailab.data.keras import BatchedKerasDataset
 
-dataset = MyDataset(config, phase)
-batched_dataset = BatchedDataProvider(config, dataset)
-keras_sequence = Sequence(config, batched_dataset)
+dataset = MyDataset()
+transformed_dataset = TransformedDataset(dataset, transformer=...)
+keras_sequence = BatchedKerasDataset(transformed_dataset)
+assert isinstance(keras_sequence, tf.keras.utils.Sequence)
+```
+
+Or in the case of pytorch
+
+```python
+from ailab.data import TransformedDataset
+from ailab.data.pytorch import BatchedPytorchDataset
+
+dataset = MyDataset()
+transformed_dataset = TransformedDataset(dataset, transformer=...)
+keras_sequence = BatchedPytorchDataset(transformed_dataset)
 assert isinstance(keras_sequence, tf.keras.utils.Sequence)
 ```
 
@@ -69,9 +84,11 @@ Firstly, it is encouraged to have all your training configuration parameters in 
 This will make extracting your training configuration for your paper easier.
 Simply subcalss the Config class.
 ```python
-from ailab.experiments import Config
+from ailab.experiment import Config
 class MyConfig(Config):
     def __init__(self):
+        super().__init__()
+
         self.train.batch_size = 42
         #...
         self.arch.model = MyModel
@@ -80,43 +97,55 @@ class MyConfig(Config):
         self.arch.prepare = MyDataset
 
         # avoid errors during training -> check completeness
-        self.check_completeness()  # preimplemented
+        self.check_completness()  # preimplemented
+
+config = MyConfig()
 ```
 
-Keeping track of configurations can be done by two lines of code, which you will have to add befor your training loop.
+## 3. Logging
+
+Keeping track of your configurations is done automatically once you setup the logging.
+It will copy all code from the current working directory to the log location where also your results will be stored.
 
 ```python
-from ailab.experiment import backup
-backup(os.path.join(checkpoint_dir, "src"))
+import ailab.experiment.logging as log
+log_dir = log.setup(config=config)
 ```
 
-There are also other handy functions to check if your code is in sync with a backup `needs_backup(path_to_backup)` and to load a backup into your pythonpath so you can import straight from your backup `load_backup(path_to_backup)`.
-
-## 3. Visualization
-
-Everything that is inside the checkpoint folder is availible to visualization.
-You can directly write data in a compatible format - images can be automatically detected.
-
-Easier is probably using the visualization api:
+Logs can be visualized as well as images in the image folder in the log_dir.
+You can log the progress of your network to be shown in realtime with an eta in the server ui.
 
 ```python
-from ailab.visualization import log_fig, log_dict, log_scalar
+import ailab.experiment.logging as log
+
+# Half way through
+log.update_progress(0.5)
+
+# We are done
+log.update_progress(1)
+```
+
+To log scalar values or images you can use the following.
+
+```python
+import ailab.experiment.logging as log
 
 # use matplotlib
 import matplotlib.pyplot as plt
 plt.plot(x, y, ...)
-log_fig("MyFigure")  # outputs MyFigure.png
+log.log_image(name="MyFigure")  # outputs images/MyFigure.png
 # or for numpy arrays of shape (h,w,1) or (h,w,3)
-log_fig("NumpyImage", my_image)  # outputs NumpyImage.png
+log.log_image(name="NumpyImage", data=my_image)  # outputs images/NumpyImage.png
+
 
 # log scalars
-log_dict("Losses", losses)  # appends to Losses.csv
-log_dict("Metrics", metrics)  # appends to Metrics.csv
-log_scalar("Learning Rate", lr)  # appends to Learning_Rate.csv
+log.log_value(name="loss", value=0.42, primary=True)  # Is shown on the front page
+log.log_value(name="mse", value=1.314)  # Is shown in the detail page
 ```
-You can use custom scripts to use the visualization data or simply use the visualization server with it`s webgui.
+You can use custom scripts to use the visualization data or simply use the ailab server with it`s webgui.
+The server is capable of realtime visualization of the data.
 
-#### Visualization server
+#### AI Lab Server
 AI Lab Visualization consists of a ui and a server.
 Since the ui is a static website that works on your local webbrowser no installation is needed. The static website is hosted [here](http://ailab.f-online.net/).
 
@@ -128,6 +157,8 @@ python -m ailab.visualization my_config.json
 
 A config file must contain a host or * for any interface, a port, a list of users as a map and a path to your checkpoints.
 (Typically the checkpoint path is on a network share, where all computers add their checkpoints and this pc reads them.)
+The list of `gpus` gives you the opportunity to limit the gpus ailab will assign for scheduled tasks.
+The gpu ids are equivalent to the numbers used for `CUDA_VISIBLE_DEVICES`.
 
 ```json
 {
@@ -137,7 +168,8 @@ A config file must contain a host or * for any interface, a port, a list of user
   {
     "admin": "CHANGE_THIS"
   },
-  "checkpoints": "/data/$USER/checkpoints"
+  "checkpoints": "/data/$USER/checkpoints",
+  "gpus": [0]
 }
 ```
 

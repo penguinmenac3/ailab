@@ -34,7 +34,7 @@ from tensorflow.keras.utils import Sequence
 
 from ailab import PHASE_TRAINVAL, PHASE_TEST, PHASE_TRAIN, PHASE_VALIDATION
 from ailab.experiment import Config, import_config
-from ailab.experiment import backup, needs_backup
+from ailab.experiment import _log_code, _is_code_log_up_to_date
 
 def _bytes_feature(value):
     return tf.train.Feature(bytes_list=tf.train.BytesList(value=[value]))
@@ -222,8 +222,8 @@ def write_data(config,
     if not os.path.exists(config.problem.tf_records_path):
         os.makedirs(config.problem.tf_records_path)
     outp_dir = os.path.join(config.problem.tf_records_path, "src")    
-    if needs_backup(outp_dir):
-        backup(outp_dir)
+    if _is_code_log_up_to_date(outp_dir):
+        _log_code(outp_dir)
     
     num_threads = max(num_threads, num_record_files)
     if isinstance(dataset, Sequence) or (callable(getattr(dataset, "__getitem__", None)) and callable(getattr(dataset, "__len__", None))):
@@ -285,7 +285,7 @@ def auto_setup_data(config, training_data=None, validation_data=None):
         needs_update = False
         if config.problem.get("tf_records_path", None) is not None:
             outp_dir = os.path.join(config.problem.tf_records_path, "src")
-            if needs_backup(outp_dir):
+            if _is_code_log_up_to_date(outp_dir):
                 needs_update = True
 
         # If data is not up to date or records should not be used load dataprovider
