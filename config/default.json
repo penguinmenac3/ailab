@@ -5,6 +5,7 @@
   {
     "admin": "CHANGE_THIS"
   },
-  "workspace": "/home/myuser/workspace",
-  "auto_projects": true
+  "workspace": "/data/$USER/experiments",
+  "auto_detect_experiments": true,
+  "gpus": [0]
 }

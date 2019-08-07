@@ -168,7 +168,8 @@ The gpu ids are equivalent to the numbers used for `CUDA_VISIBLE_DEVICES`.
   {
     "admin": "CHANGE_THIS"
   },
-  "checkpoints": "/data/$USER/checkpoints",
+  "workspace": "/data/$USER/experiments",
+  "auto_detect_experiments": true,
   "gpus": [0]
 }
 ```

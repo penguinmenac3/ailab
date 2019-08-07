@@ -28,7 +28,7 @@ class Server(object):
         self.processes = {}
         self.update_terminals = []
         self.ignore_list = PYTHON_IGNORE_LIST
-        self.rempy_server = RempyServer()
+        self.rempy_server = RempyServer(config)
         Thread(target=self.run).start()
 
     def run(self):
@@ -57,11 +57,11 @@ class Server(object):
         entanglement.send_terminal = partial(self.send_terminal, state, entanglement)
         entanglement.close_term = partial(self.close_term, state, entanglement)
         entanglement.resize_term = partial(self.resize_term, state, entanglement)
-        for exp_name in self.config["projects"]:
+        for exp_name in self.config["experiments"]:
             entanglement.remote_fun("update_experiment")(exp_name, "ready")
 
     def run_file(self, state, entanglement, file):
-        working_dir = self.config["projects"][state["experiment"]]
+        working_dir = self.config["experiments"][state["experiment"]]
         filename = os.path.join(working_dir, file)
         cmd = None
         if file.endswith(".py"):
@@ -75,7 +75,7 @@ class Server(object):
         if cmd is None:
             cmd = "bash -i -l -s"
         project = state["experiment"]
-        working_dir = self.config["projects"][state["experiment"]]
+        working_dir = self.config["experiments"][state["experiment"]]
         if project not in self.terminals:
             self.terminals[project] = {}
         if project not in self.processes:
@@ -140,7 +140,7 @@ class Server(object):
     def add_experiment(self, state, entanglement, name, path):
         path = os.path.join(self.config["workspace"], path).replace("\\", "/")
         os.makedirs(path, exist_ok=True)
-        self.config["projects"][name] = path
+        self.config["experiments"][name] = path
         config_str = json.dumps(self.config, indent=4, sort_keys=True)
         with open(self.config_path, "w") as f:
             f.write(config_str)
@@ -167,18 +167,18 @@ class Server(object):
         filelist = []
         if state["experiment"] is None:
             return
-        for path, subdirs, files in os.walk(self.config["projects"][state["experiment"]]):
+        for path, subdirs, files in os.walk(self.config["experiments"][state["experiment"]]):
             files = [x for x in files if not self.__ignore(x, self.ignore_list)]
             subdirs[:] = [x for x in subdirs if not self.__ignore(x, self.ignore_list)]
             for name in files:
                 file = os.path.join(path, name)
                 file = file.replace("\\", "/")
-                file = file.replace(self.config["projects"][state["experiment"]], ".")
+                file = file.replace(self.config["experiments"][state["experiment"]], ".")
                 filelist.append(file)
         entanglement.remote_fun("update_files")(filelist)
 
     def save_file(self, state, entanglement, name, content):
-        with open(os.path.join(self.config["projects"][state["experiment"]], name), "w") as f:
+        with open(os.path.join(self.config["experiments"][state["experiment"]], name), "w") as f:
             f.write(content)
 
         self.lint(state, entanglement, name)
@@ -201,7 +201,7 @@ class Server(object):
             filetype = "javascript"
         content = ""
         try:
-            with open(os.path.join(self.config["projects"][state["experiment"]], name), "r") as f:
+            with open(os.path.join(self.config["experiments"][state["experiment"]], name), "r") as f:
                 content = f.read()
         except:
             content = "Error reading file"
@@ -209,7 +209,7 @@ class Server(object):
         self.lint(state, entanglement, name)
 
     def lint(self, state, entanglement, name):
-        file = os.path.join(self.config["projects"][state["experiment"]], name)
+        file = os.path.join(self.config["experiments"][state["experiment"]], name)
         linter_result = "TODO linter not implemented."
         entanglement.remote_fun("update_linter")({"name": name, "content": linter_result})
 
@@ -239,12 +239,12 @@ class Server(object):
             self.rempy_server.callback(entanglement)
         else:
             # Read experiments automatically?
-            if "auto_projects" in self.config and self.config["auto_projects"]:
+            if "auto_detect_experiments" in self.config and self.config["auto_detect_experiments"]:
                 folders = [os.path.join(self.config["workspace"], f) for f in os.listdir(self.config["workspace"])]
                 folders = [f for f in folders if os.path.isdir(f)]
                 names = [f.split(os.sep)[-1].replace("-", " ").replace("_", " ") for f in folders]
-                self.config["projects"] = dict(zip(names, folders))
-                print("Automatically detected projects: {}".format(self.config["projects"]))
+                self.config["experiments"] = dict(zip(names, folders))
+                print("Automatically detected experiments: {}".format(self.config["experiments"]))
 
             self.setup(state, entanglement)
             try:
