@@ -37,6 +37,11 @@ class ClassDecorator(ABC):
 
 class RunOnce(ClassDecorator):
     def __init__(self, f):
+        """
+        A decorator that ensures a function in an object gets only called exactly once.
+
+        :param f: The function that should be wrapped.
+        """
         self.f = f
         self.called = {}
 

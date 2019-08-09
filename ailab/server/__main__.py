@@ -4,7 +4,11 @@ import datetime
 from ailab.server.server import Server
 
 
-def run_server(config_path):
+def run_server(config_path: str) -> None:
+    """
+    Run the ailab server.
+    :param config_path: The config file that specifies the ailab server.
+    """
     with open("exceptions.log", "w") as log:
         log.write("%s: Server Started\n" % datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
     config = {}

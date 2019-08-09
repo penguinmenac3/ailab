@@ -5,6 +5,7 @@ import signal
 import webbrowser
 from pathlib import Path
 from threading import Thread
+from typing import Callable
 WINDOWS = False
 try:
     import pyte
@@ -14,32 +15,32 @@ except:
 
 
 class Terminal(object):
-    def add_listener(self, listener):
+    def add_listener(self, listener: Callable[[str], None]) -> None:
         raise NotImplementedError()
 
-    def remove_listener(self, listener):
+    def remove_listener(self, listener: Callable[[str], None]) -> None:
         raise NotImplementedError()
 
-    def resize(self, lines, columns):
+    def resize(self, lines: int, columns: int) -> None:
         raise NotImplementedError()
 
-    def feed(self, data):
+    def feed(self, data: str) -> None:
         raise NotImplementedError()
 
-    def dumps(self):
+    def dumps(self) -> str:
         raise NotImplementedError()
 
-    def kill(self):
+    def kill(self) -> None:
         raise NotImplementedError()
 
 
 class WindowsTerminal(Terminal):
-    def __init__(self, command, columns, lines, cwd=None):
+    def __init__(self, command: str, columns: int, lines: int, cwd: str = None):
         pass
 
 
 class LinuxTerminal(Terminal):
-    def __init__(self, command, columns, lines, cwd=None):
+    def __init__(self, command: str, columns: int, lines: int, cwd: str = None) -> None:
         pid, master_fd = pty.fork()
         if pid == 0:  # Child.
             if cwd is not None:
@@ -63,16 +64,16 @@ class LinuxTerminal(Terminal):
         self.t.start()
         self.listeners = []
 
-    def add_listener(self, listener):
+    def add_listener(self, listener: Callable[[str], None]) -> None:
         self.listeners.append(listener)
 
-    def remove_listener(self, listener):
+    def remove_listener(self, listener: Callable[[str], None]) -> None:
         self.listeners.remove(listener)
 
-    def resize(self, lines, columns):
+    def resize(self, lines: int, columns: int) -> None:
         self.screen.resize(lines, columns)
 
-    def read_proc(self):
+    def read_proc(self) -> None:
         while True:
             try:
                 line = self.pout.read(1).decode("utf-8")
@@ -85,17 +86,17 @@ class LinuxTerminal(Terminal):
             except:
                 break
 
-    def feed(self, data):
+    def feed(self, data: str) -> None:
         self.pout.write(data.encode("utf-8"))
 
-    def dumps(self):
+    def dumps(self) -> str:
         return "\n".join(self.screen.display)
 
-    def kill(self):
+    def kill(self) -> None:
         os.killpg(self.pid, signal.SIGKILL)
 
 
-def open_terminal(command="bash -i -l -s", columns=80, lines=24, cwd=None):
+def open_terminal(command: str = "bash -i -l -s", columns: int = 80, lines: int = 24, cwd: str = None) -> Terminal:
     if WINDOWS:
         return WindowsTerminal(command, columns, lines, cwd)
     else:

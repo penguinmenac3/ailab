@@ -1,6 +1,7 @@
 import os
 import traceback
 import datetime
+from typing import Dict, Any, List
 import signal
 import subprocess
 import json
@@ -9,6 +10,7 @@ from threading import Thread
 from functools import partial
 import GPUtil
 import psutil
+from entangle.entanglement import Entanglement
 from ailab.server.terminal_emulator import open_terminal
 from rempy.server import Server as RempyServer
 
@@ -17,7 +19,13 @@ PYTHON_IGNORE_LIST = ["__pycache__", "*.pyc", ".ipynb_checkpoints", ".git"]
 
 
 class Server(object):
-    def __init__(self, config, config_path):
+    def __init__(self, config: Dict[str, Any], config_path: str) -> None:
+        """
+        Creates an ailab server.
+
+        :param config: The configuration for the server as a dictionary.
+        :param config_path: The path where the config file is stored, so it can be overwritten on change.
+        """
         self.config = config
         self.config_path = config_path
         self.server_load = {"cpu": 0, "ram": 0, "gpus": []}
@@ -31,7 +39,10 @@ class Server(object):
         self.rempy_server = RempyServer(config)
         Thread(target=self.run).start()
 
-    def run(self):
+    def run(self) -> None:
+        """
+        Run the server.
+        """
         while self.running:
             cpu = int(psutil.cpu_percent() * 10) / 10
             ram = int(psutil.virtual_memory().percent * 10) / 10
@@ -40,7 +51,12 @@ class Server(object):
             self.server_load = {"cpu": cpu, "ram": ram, "gpus": gpus}
             sleep(2)
 
-    def setup(self, state, entanglement):
+    def setup(self, state: Dict[str, Any], entanglement: Entanglement) -> None:
+        """
+        Setup the server. This function registers all the local functions to the entanglement.
+        :param state: The state object which is shared.
+        :param entanglement: The entanglement for the connection that should be setup.
+        """
         state["server_load"] = None
         state["experiment"] = None
         state["term_height"] = 80
@@ -60,7 +76,7 @@ class Server(object):
         for exp_name in self.config["experiments"]:
             entanglement.remote_fun("update_experiment")(exp_name, "ready")
 
-    def run_file(self, state, entanglement, file):
+    def run_file(self, state: Dict[str, Any], entanglement: Entanglement, file: str) -> None:
         working_dir = self.config["experiments"][state["experiment"]]
         filename = os.path.join(working_dir, file)
         cmd = None
@@ -71,7 +87,7 @@ class Server(object):
         if cmd is not None:
             self.create_term_with_cmd(state, entanglement, cmd)
 
-    def create_term_with_cmd(self, state, entanglement, cmd):
+    def create_term_with_cmd(self, state: Dict[str, Any], entanglement: Entanglement, cmd) -> None:
         if cmd is None:
             cmd = "bash -i -l -s"
         project = state["experiment"]
@@ -84,7 +100,7 @@ class Server(object):
         self.terminals[project][term] = ""
         self.processes[project][term.pid] = term
 
-    def send_terminal(self, state, entanglement, process_id, inp):
+    def send_terminal(self, state: Dict[str, Any], entanglement: Entanglement, process_id: str, inp: str) -> None:
         project = state["experiment"]
         if process_id in self.processes[project]:
             execProcess = self.processes[project][process_id]
@@ -92,7 +108,7 @@ class Server(object):
         else:
             print("Tried to write to non existent process.")
 
-    def resize_term(self, state, entanglement, lines, columns):
+    def resize_term(self, state: Dict[str, Any], entanglement: Entanglement, lines: int, columns: int) -> None:
         project = state["experiment"]
         state["term_height"] = lines
         state["term_width"] = columns
@@ -101,10 +117,10 @@ class Server(object):
                 execProcess = self.processes[project][process_id]
                 execProcess.resize(lines, columns)
 
-    def create_term(self, state, entanglement):
+    def create_term(self, state: Dict[str, Any], entanglement: Entanglement) -> None:
         self.create_term_with_cmd(state, entanglement, None)
 
-    def close_term(self, state, entanglement, pid):
+    def close_term(self, state: Dict[str, Any], entanglement: Entanglement, pid: str) -> None:
         project = state["experiment"]
         execProcess = None
         proc_idx = 0
@@ -127,7 +143,7 @@ class Server(object):
             # print("process killed {}".format(execProcess.returncode))
             entanglement.remote_fun("update_terminal")(project, execProcess.pid, None)
 
-    def set_experiment(self, state, entanglement, name):
+    def set_experiment(self, state: Dict[str, Any], entanglement: Entanglement, name: str):
         entanglement.remote_fun("reset_experiment")()
         entanglement.experiment_title = name
         state["experiment"] = name
@@ -137,7 +153,7 @@ class Server(object):
             for execProcess in self.terminals[name]:
                 entanglement.remote_fun("update_terminal")(name, execProcess.pid, self.terminals[name][execProcess])
 
-    def add_experiment(self, state, entanglement, name, path):
+    def add_experiment(self, state: Dict[str, Any], entanglement: Entanglement, name: str, path: str):
         path = os.path.join(self.config["workspace"], path).replace("\\", "/")
         os.makedirs(path, exist_ok=True)
         self.config["experiments"][name] = path
@@ -146,7 +162,7 @@ class Server(object):
             f.write(config_str)
         entanglement.remote_fun("update_experiment")(name, "ready")
 
-    def __ignore(self, candidate, forbidden_list):
+    def __ignore(self, candidate: str, forbidden_list: List[str]) -> bool:
         # Parse list to find simple placeholder notations
         start_list = []
         end_list = []
@@ -163,7 +179,7 @@ class Server(object):
             res |= candidate.endswith(item)
         return res
 
-    def get_files(self, state, entanglement):
+    def get_files(self, state: Dict[str, Any], entanglement: Entanglement) -> None:
         filelist = []
         if state["experiment"] is None:
             return
@@ -177,13 +193,13 @@ class Server(object):
                 filelist.append(file)
         entanglement.remote_fun("update_files")(filelist)
 
-    def save_file(self, state, entanglement, name, content):
+    def save_file(self, state: Dict[str, Any], entanglement: Entanglement, name: str, content: str) -> None:
         with open(os.path.join(self.config["experiments"][state["experiment"]], name), "w") as f:
             f.write(content)
 
         self.lint(state, entanglement, name)
 
-    def open_file(self, state, entanglement, name):
+    def open_file(self, state: Dict[str, Any], entanglement: Entanglement, name: str) -> None:
         filetype = "python"
         if name.endswith(".sh"):
             filetype = "shell"
@@ -208,12 +224,12 @@ class Server(object):
         entanglement.remote_fun("update_file")({"name": name, "content": content, "type": filetype})
         self.lint(state, entanglement, name)
 
-    def lint(self, state, entanglement, name):
+    def lint(self, state: Dict[str, Any], entanglement: Entanglement, name: str) -> None:
         file = os.path.join(self.config["experiments"][state["experiment"]], name)
         linter_result = "TODO linter not implemented."
         entanglement.remote_fun("update_linter")({"name": name, "content": linter_result})
 
-    def tick(self, state, entanglement):
+    def tick(self, state: Dict[str, Any], entanglement: Entanglement) -> None:
         if self.server_load != state["server_load"]:
             state["server_load"] = self.server_load
             entanglement.remote_fun("update_server_status")(self.server_load)
@@ -232,7 +248,7 @@ class Server(object):
                     state["tmp"][project][execProcess] = text
                     entanglement.remote_fun("update_terminal")(project, execProcess.pid, text)
 
-    def on_entangle(self, entanglement):
+    def on_entangle(self, entanglement: Entanglement) -> None:
         state = {}
         protocol = entanglement.get("protocol")
         if protocol == "rempy":
