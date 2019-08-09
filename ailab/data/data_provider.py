@@ -19,6 +19,7 @@
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
+from typing import Iterable, List, Any
 
 
 class Dataset(object):
@@ -32,13 +33,19 @@ class Dataset(object):
     The version function returns a number (can be a hash) which changes, whenever the dataset changes.
     This enables subsequent callers to buffer this dataset and update their buffers when the version changes.
     """
-    def __getitem__(self, index):
+    def __getitem__(self, index: int) -> Any:
         raise NotImplementedError
 
-    def __len__(self):
+    def __len__(self) -> int:
         raise NotImplementedError
 
-    def version(self):
+    @property
+    def version(self) -> str:
+        """
+        Defines the version of the data in the dataset. When the data is static you can return a static string.
+
+        :return: The version number of the dataset.
+        """
         raise NotImplementedError
 
 
@@ -46,22 +53,37 @@ class Transformer(object):
     """
     A transformer should implement ``__call__``.
     """
-    def __call__(self, args):
+    def __call__(self, *args):
+        """
+        This function gets the data from the previous transformer or dataset as input and should output the data again.
+        :param args: The input data.
+        :return: The output data.
+        """
         raise NotImplementedError
 
 
 class ComposeTransforms(Transformer):
-    def __init__(self, transforms):
+    def __init__(self, transforms: Iterable[Transformer]) -> None:
+        """
+        A transform that applies the transforms provided in transforms in order.
+
+        :param transforms: An Iterable of Transformers which is applied on the data.
+        """
         self.transforms = transforms
 
-    def __call__(self, args):
+    def __call__(self, *args):
+        """
+        Applies all the transforms in order.
+        :param args: The input data.
+        :return: The transformed data.
+        """
         for t in self.transforms:
-            args = t(args)
+            args = t(*args)
         return args
 
 
 class TransformedDataset(object):
-    def __init__(self, dataset, transformer):
+    def __init__(self, dataset: List[Any], transformer: Transformer) -> None:
         """
         Create a transfored dataset by applying a transformer.
 
@@ -71,8 +93,8 @@ class TransformedDataset(object):
         self.dataset = dataset
         self.transformer = transformer
     
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self.dataset)
 
-    def __getitem__(self, index):
+    def __getitem__(self, index: int) -> Any:
         return self.transformer(self.dataset[index])

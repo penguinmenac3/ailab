@@ -2,9 +2,11 @@ import tensorflow as tf
 from math import ceil
 import numpy as np
 import ailab
+from typing import List
+
 
 class BatchedKerasDataset(tf.keras.utils.Sequence):
-    def __init__(self, dataset):
+    def __init__(self, dataset: List) -> None:
         """
         Make a batched data provider from any list object.
 
