@@ -7,7 +7,7 @@ import json
 import numpy as np
 import scipy.misc
 import matplotlib.pyplot as plt
-from typing import Callable
+from typing import Callable, List
 
 import entangle
 from ailab.experiment.config import Config
@@ -22,7 +22,7 @@ PYTHON_IGNORE_LIST = ["__pycache__", "*.pyc", ".ipynb_checkpoints", "checkpoints
                       "tfrecords", "*.code-workspace", ".git"]
 
 
-def __ignore(candidate, forbidden_list):
+def __ignore(candidate: str, forbidden_list: List[str]) -> bool:
     # Parse list to find simple placeholder notations
     start_list = []
     end_list = []
@@ -40,7 +40,7 @@ def __ignore(candidate, forbidden_list):
     return res
 
 
-def __get_all_files(root, forbidden_list):
+def __get_all_files(root: str, forbidden_list: List[str]) -> List[str]:
     all_files = []
     root_with_sep = root + os.sep
     for path, subdirs, files in os.walk(root):
@@ -51,7 +51,7 @@ def __get_all_files(root, forbidden_list):
     return all_files
 
 
-def _get_loaded_files(root=None, forbidden_list=PYTHON_IGNORE_LIST):
+def _get_loaded_files(root: str = None, forbidden_list: List[str] = PYTHON_IGNORE_LIST) -> List[str]:
     """
     Get a list of all files that correspond to loaded modules in the root folder.
 
@@ -66,18 +66,18 @@ def _get_loaded_files(root=None, forbidden_list=PYTHON_IGNORE_LIST):
     return cwd_files
 
 
-def _get_backup_path(fname, outp_dir=None):
+def _get_backup_path(fname: str, outp_dir: str = None) -> str:
     assert outp_dir is not None
 
     return os.path.join(os.path.normpath(outp_dir), fname)
 
 
-def _copyfile(src, dst, follow_symlinks=True, create_missing_dirs=True):
+def _copyfile(src: str, dst: str, follow_symlinks: bool = True, create_missing_dirs: bool = True) -> None:
     dst_dir = os.path.dirname(dst)
     if not os.path.exists(dst_dir):
         os.makedirs(dst_dir)
 
-    shutil.copyfile(src, dst, follow_symlinks=True)
+    shutil.copyfile(src, dst, follow_symlinks=follow_symlinks)
 
 
 def _write_log(*, obj: object) -> None:
