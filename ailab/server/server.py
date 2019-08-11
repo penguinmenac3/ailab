@@ -188,7 +188,9 @@ class Server(object):
             subdirs[:] = [x for x in subdirs if not self.__ignore(x, self.ignore_list)]
             for name in files:
                 file = os.path.join(path, name)
+                file = file.replace(self.config["experiments"][state["experiment"]], ".")
                 file = file.replace("\\", "/")
+                # In case user used unix format on windows do it after conversion.
                 file = file.replace(self.config["experiments"][state["experiment"]], ".")
                 filelist.append(file)
         entanglement.remote_fun("update_files")(filelist)
@@ -200,6 +202,7 @@ class Server(object):
         self.lint(state, entanglement, name)
 
     def open_file(self, state: Dict[str, Any], entanglement: Entanglement, name: str) -> None:
+        print("Filename: {}".format(name))
         filetype = "python"
         if name.endswith(".sh"):
             filetype = "shell"
