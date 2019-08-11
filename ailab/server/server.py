@@ -202,7 +202,6 @@ class Server(object):
         self.lint(state, entanglement, name)
 
     def open_file(self, state: Dict[str, Any], entanglement: Entanglement, name: str) -> None:
-        print("Filename: {}".format(name))
         filetype = "python"
         if name.endswith(".sh"):
             filetype = "shell"
