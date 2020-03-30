@@ -5,6 +5,7 @@ from typing import Dict, Any, List
 import signal
 import subprocess
 import json
+import base64
 from time import sleep, time, strftime, gmtime
 from threading import Thread
 from functools import partial
@@ -16,7 +17,7 @@ from rempy.server import Server as RempyServer
 
 TICKRATE = 0.1
 PYTHON_IGNORE_LIST = ["__pycache__", "*.pyc", ".ipynb_checkpoints", ".git"]
-
+DEFAULT_RESULT_EVENT = {"timestamp": None, "goal": None, "progress": None, "eta": None, "score": None}
 
 class Server(object):
     def __init__(self, config: Dict[str, Any], config_path: str) -> None:
@@ -29,6 +30,9 @@ class Server(object):
         self.config = config
         self.config_path = config_path
         self.server_load = {"cpu": 0, "ram": 0, "gpus": []}
+        self.projects = {}
+        self.results = {}
+        self.latest_result_events = {}
         self.running = True
         self.current_task = None
         self.username = None
@@ -49,6 +53,17 @@ class Server(object):
             gpus = [{"id": gpu.id, "GPU": int(gpu.load * 1000) / 10, "MEM": int(gpu.memoryUtil * 1000) / 10}
                     for gpu in GPUtil.getGPUs()]
             self.server_load = {"cpu": cpu, "ram": ram, "gpus": gpus}
+
+            # Read experiment log and get latest event.
+            for result_name in self.results:
+                log_fname = os.path.join(self.results[result_name], "log.txt")
+                event = DEFAULT_RESULT_EVENT
+                if os.path.exists(log_fname):
+                    with open(os.path.join(self.results[result_name], "log.txt"), "r") as f:
+                        lines = f.readlines()
+                    event = lines[-1]
+                    event = json.loads(event)
+                self.latest_result_events[result_name] = event
             sleep(2)
 
     def setup(self, state: Dict[str, Any], entanglement: Entanglement) -> None:
@@ -61,10 +76,11 @@ class Server(object):
         state["experiment"] = None
         state["term_height"] = 80
         state["term_width"] = 24
+        state["latest_result_events"] = {}
         self.username = entanglement.username
         print(self.username)
         entanglement.set_experiment = partial(self.set_experiment, state, entanglement)
-        entanglement.add_experiment = partial(self.add_experiment, state, entanglement)
+        entanglement.new_project = partial(self.new_project, state, entanglement)
         entanglement.save_file = partial(self.save_file, state, entanglement)
         entanglement.open_file = partial(self.open_file, state, entanglement)
         entanglement.get_files = partial(self.get_files, state, entanglement)
@@ -73,11 +89,17 @@ class Server(object):
         entanglement.send_terminal = partial(self.send_terminal, state, entanglement)
         entanglement.close_term = partial(self.close_term, state, entanglement)
         entanglement.resize_term = partial(self.resize_term, state, entanglement)
-        for exp_name in self.config["experiments"]:
-            entanglement.remote_fun("update_experiment")(exp_name, "ready")
+        for exp_name in self.projects:
+            entanglement.remote_fun("update_experiment")(exp_name, "project")
+        for result_name in self.results:
+            if result_name not in self.latest_result_events:
+                self.latest_result_events[result_name] = DEFAULT_RESULT_EVENT
+            if result_name not in state["latest_result_events"] or self.latest_result_events[result_name] != state["latest_result_events"][result_name]:
+                state["latest_result_events"][result_name] = self.latest_result_events[result_name]
+                entanglement.remote_fun("update_experiment")(result_name, state["latest_result_events"][result_name])
 
     def run_file(self, state: Dict[str, Any], entanglement: Entanglement, file: str) -> None:
-        working_dir = self.config["experiments"][state["experiment"]]
+        working_dir = self.experiments[state["experiment"]]
         filename = os.path.join(working_dir, file)
         cmd = None
         if file.endswith(".py"):
@@ -91,7 +113,7 @@ class Server(object):
         if cmd is None:
             cmd = "bash -i -l -s"
         project = state["experiment"]
-        working_dir = self.config["experiments"][state["experiment"]]
+        working_dir = self.experiments[state["experiment"]]
         if project not in self.terminals:
             self.terminals[project] = {}
         if project not in self.processes:
@@ -147,20 +169,19 @@ class Server(object):
         entanglement.remote_fun("reset_experiment")()
         entanglement.experiment_title = name
         state["experiment"] = name
-        t = strftime("%Y-%m-%d %H:%M:%S", gmtime(time()))
-        entanglement.remote_fun("update_experiment_events")([{"time": t, "event": "Test"}])
         if name in self.terminals:
             for execProcess in self.terminals[name]:
                 entanglement.remote_fun("update_terminal")(name, execProcess.pid, self.terminals[name][execProcess])
 
-    def add_experiment(self, state: Dict[str, Any], entanglement: Entanglement, name: str, path: str):
+    def new_project(self, state: Dict[str, Any], entanglement: Entanglement, name: str, path: str):
         path = os.path.join(self.config["workspace"], path).replace("\\", "/")
         os.makedirs(path, exist_ok=True)
-        self.config["experiments"][name] = path
+        self.experiments[name] = path
+        self.projects[name] = path
         config_str = json.dumps(self.config, indent=4, sort_keys=True)
         with open(self.config_path, "w") as f:
             f.write(config_str)
-        entanglement.remote_fun("update_experiment")(name, "ready")
+        entanglement.remote_fun("update_experiment")(name, "project")
 
     def __ignore(self, candidate: str, forbidden_list: List[str]) -> bool:
         # Parse list to find simple placeholder notations
@@ -183,20 +204,22 @@ class Server(object):
         filelist = []
         if state["experiment"] is None:
             return
-        for path, subdirs, files in os.walk(self.config["experiments"][state["experiment"]]):
+        for path, subdirs, files in os.walk(self.experiments[state["experiment"]]):
             files = [x for x in files if not self.__ignore(x, self.ignore_list)]
             subdirs[:] = [x for x in subdirs if not self.__ignore(x, self.ignore_list)]
             for name in files:
                 file = os.path.join(path, name)
-                file = file.replace(self.config["experiments"][state["experiment"]], ".")
+                file = file.replace(self.experiments[state["experiment"]], ".")
                 file = file.replace("\\", "/")
                 # In case user used unix format on windows do it after conversion.
-                file = file.replace(self.config["experiments"][state["experiment"]], ".")
+                file = file.replace(self.experiments[state["experiment"]], ".")
                 filelist.append(file)
         entanglement.remote_fun("update_files")(filelist)
 
     def save_file(self, state: Dict[str, Any], entanglement: Entanglement, name: str, content: str) -> None:
-        with open(os.path.join(self.config["experiments"][state["experiment"]], name), "w") as f:
+        if name.endswith(".png"):
+            return
+        with open(os.path.join(self.experiments[state["experiment"]], name), "w") as f:
             f.write(content)
 
         self.lint(state, entanglement, name)
@@ -217,17 +240,28 @@ class Server(object):
             filetype = "javascript"
         if name.endswith(".json"):
             filetype = "javascript"
+        if name.endswith(".png"):
+            filetype = "image"
         content = ""
-        try:
-            with open(os.path.join(self.config["experiments"][state["experiment"]], name), "r") as f:
-                content = f.read()
-        except:
-            content = "Error reading file"
+        if filetype == "image":
+            try:
+                with open(os.path.join(self.experiments[state["experiment"]], name), "rb") as f:
+                    content = base64.b64encode(f.read()).decode("utf-8")
+                    print(content)
+            except:
+                content = ""
+        else:
+            try:
+                with open(os.path.join(self.experiments[state["experiment"]], name), "r") as f:
+                    content = f.read()
+            except:
+                content = "Error reading file"
         entanglement.remote_fun("update_file")({"name": name, "content": content, "type": filetype})
-        self.lint(state, entanglement, name)
+        if filetype != "image":
+            self.lint(state, entanglement, name)
 
     def lint(self, state: Dict[str, Any], entanglement: Entanglement, name: str) -> None:
-        file = os.path.join(self.config["experiments"][state["experiment"]], name)
+        file = os.path.join(self.experiments[state["experiment"]], name)
         linter_result = "TODO linter not implemented."
         entanglement.remote_fun("update_linter")({"name": name, "content": linter_result})
 
@@ -235,6 +269,11 @@ class Server(object):
         if self.server_load != state["server_load"]:
             state["server_load"] = self.server_load
             entanglement.remote_fun("update_server_status")(self.server_load)
+
+        for result_name in self.latest_result_events:
+            if result_name not in state["latest_result_events"] or self.latest_result_events[result_name] != state["latest_result_events"][result_name]:
+                state["latest_result_events"][result_name] = self.latest_result_events[result_name]
+                entanglement.remote_fun("update_experiment")(result_name, state["latest_result_events"][result_name])
 
         project = state["experiment"]
         if project is not None and project in self.terminals:
@@ -257,12 +296,19 @@ class Server(object):
             self.rempy_server.callback(entanglement)
         else:
             # Read experiments automatically?
-            if "auto_detect_experiments" in self.config and self.config["auto_detect_experiments"]:
+            if "auto_detect_projects" in self.config and self.config["auto_detect_projects"]:
                 folders = [os.path.join(self.config["workspace"], f) for f in os.listdir(self.config["workspace"])]
                 folders = [f for f in folders if os.path.isdir(f)]
                 names = [f.split(os.sep)[-1].replace("-", " ").replace("_", " ") for f in folders]
-                self.config["experiments"] = dict(zip(names, folders))
-                print("Automatically detected experiments: {}".format(self.config["experiments"]))
+                self.projects = dict(zip(names, folders))
+            else:
+                self.projects = self.config["projects"]
+                
+            folders = [os.path.join(self.config["results"], f) for f in os.listdir(self.config["results"])]
+            folders = [f for f in folders if os.path.isdir(f)]
+            names = [f.split(os.sep)[-1].replace("-", " ").replace("_", " ") for f in folders]
+            self.results = dict(zip(names, folders))
+            self.experiments = {**self.projects, **self.results}
 
             self.setup(state, entanglement)
             try:
