@@ -56,10 +56,12 @@ class Server(object):
 
             # Read experiment log and get latest event.
             for result_name in self.results:
-                log_fname = os.path.join(self.results[result_name], "log.txt")
+                log_fname = os.path.join(self.results[result_name], "ailab.log")
+                if not os.path.exists(log_fname):
+                    log_fname = os.path.join(self.results[result_name], "log.txt")
                 event = DEFAULT_RESULT_EVENT
                 if os.path.exists(log_fname):
-                    with open(os.path.join(self.results[result_name], "log.txt"), "r") as f:
+                    with open(log_fname, "r") as f:
                         lines = f.readlines()
                     event = lines[-1]
                     event = json.loads(event)
