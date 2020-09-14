@@ -1,7 +1,7 @@
 import os
 import traceback
 import datetime
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Sequence
 import signal
 import subprocess
 import json
@@ -59,13 +59,14 @@ class Server(object):
                 log_fname = os.path.join(self.results[result_name], "ailab.log")
                 if not os.path.exists(log_fname):
                     log_fname = os.path.join(self.results[result_name], "log.txt")
-                event = DEFAULT_RESULT_EVENT
                 if os.path.exists(log_fname):
                     with open(log_fname, "r") as f:
                         lines = f.readlines()
                     event = lines[-1]
                     event = json.loads(event)
-                self.latest_result_events[result_name] = event
+                    self.latest_result_events[result_name] = event
+                elif result_name in self.latest_result_events:
+                    del self.latest_result_events[result_name]
             sleep(2)
 
     def setup(self, state: Dict[str, Any], entanglement: Entanglement) -> None:
@@ -291,6 +292,21 @@ class Server(object):
                     state["tmp"][project][execProcess] = text
                     entanglement.remote_fun("update_terminal")(project, execProcess.pid, text)
 
+    def find_results(self, folder: str, max_depth: int, depth: int=0) -> List [str]:
+        folders = []
+        if depth < max_depth:
+            candidate_folders = [os.path.join(folder, f) for f in os.listdir(folder)]
+            candidate_folders = [f for f in candidate_folders if os.path.isdir(f)]
+            for candidate in candidate_folders:
+                log_fname = os.path.join(candidate, "ailab.log")
+                if not os.path.exists(log_fname):
+                    log_fname = os.path.join(candidate, "log.txt")
+                if os.path.exists(log_fname):
+                    folders.append(candidate)
+                else:
+                    folders.extend(self.find_results(candidate, max_depth, depth=depth+1))
+        return folders
+
     def on_entangle(self, entanglement: Entanglement) -> None:
         state = {}
         protocol = entanglement.get("protocol")
@@ -306,9 +322,14 @@ class Server(object):
             else:
                 self.projects = self.config["projects"]
                 
-            folders = [os.path.join(self.config["results"], f) for f in os.listdir(self.config["results"])]
-            folders = [f for f in folders if os.path.isdir(f)]
-            names = [f.split(os.sep)[-1].replace("-", " ").replace("_", " ") for f in folders]
+            folders = self.find_results(self.config["results"], max_depth=5)
+            names = []
+            for name in folders:
+                name = name.replace(self.config["results"], "")
+                name = name.replace("-", " ").replace("_", " ")
+                if name.startswith("/"):
+                    name = name[1:]
+                names.append(name)
             self.results = dict(zip(names, folders))
             self.experiments = {**self.projects, **self.results}
 

@@ -1,158 +1,27 @@
 # AI Lab
 
-AI Lab tries to make developing neural networks easier. It is written with the major frameworks keras, tensorflow 2 and pytorch 1 in mind.
-
-Whilst the implementation of the model and training loop differ a lot between the frameworks, there is some common ground:
-1. Loading an preparing the data
-2. Experiment management (multiple configurations, training servers)
-3. Logging and Visualization
-
-Details on what is common here will be explained after a short installation instruction.
+AI Lab is a gui and a server backend.
+The GUI provides an overview over experiments and their status, based on logfiles on the disk.
+The server provides functionalities for the gui such as parsing the logfiles, getting the usage of the system and providing the files to view in the gui.
+Furthermore, the server also provides a rempy host, where jobs can be submitted for exection.
 
 ## Installation
 
-1. Install [tensorflow 2](https://www.tensorflow.org/install) or [pytorch 1](https://pytorch.org/get-started/locally/) according to their instructions.
-
-2. Simply pip install this package:
+1. Simply pip install this package from git:
 
 ```bash
-pip install ailab
+pip install git+https://github.com/penguinmenac3/ailab.git
 ```
 
-## 1. Loading and preparing the data
+## Running: AI Lab Server
 
-At the core of each ai problem is some dataset.
-The dataset exploration, loading and preparation is to a large degree framework independant.
-Only the last step - loading it on the gpu - is framework dependant.
-Therefor, a shared dataloading methodology, which is compatible with all frameworks is provided.
-
-```python
-from ailab.data import Dataset
-
-class MyDataset(Dataset):
-    def __init__(self):
-    
-    def __len__(self):
-        return 42
-
-    def __getitem__(self, index):
-        features = {"foo":[1,2,3]}
-        labels = {"bar":[3,2,1], "baz": [4,5,6]}
-        return features, labels
-
-    def version(self):
-        return 1
-```
-
-This dataset can then be transformed and converted to the framework. In this case we will use keras.
-
-```python
-import tensorflow as tf
-from ailab.data import TransformedDataset
-from ailab.data.keras import BatchedKerasDataset
-
-dataset = MyDataset()
-transformed_dataset = TransformedDataset(dataset, transformer=...)
-keras_sequence = BatchedKerasDataset(transformed_dataset)
-assert isinstance(keras_sequence, tf.keras.utils.Sequence)
-```
-
-Or in the case of pytorch
-
-```python
-from ailab.data import TransformedDataset
-from ailab.data.pytorch import BatchedPytorchDataset
-
-dataset = MyDataset()
-transformed_dataset = TransformedDataset(dataset, transformer=...)
-keras_sequence = BatchedPytorchDataset(transformed_dataset)
-assert isinstance(keras_sequence, tf.keras.utils.Sequence)
-```
-
-## 2. Experiment management
-
-In real world scenarios your first approach typically does not work.
-You will need a lot of iterations until it works.
-During those iterations it will happen, that you make progress towards your goal and that you step backwards.
-When you have a cluster and multiple gpus at hand, running multiple experiments in paralell can be a time saver.
-However, keeping track of what exirement was executed with which code/configuration is difficult and prone to errors.
-
-AI Lab provides easy experiment management.
-Ranging from running multiple experiments on different machines and monitoring their progress via the visualization module, or keeping track of configurations.
-
-Firstly, it is encouraged to have all your training configuration parameters in one central place and not scattered all across your code.
-This will make extracting your training configuration for your paper easier.
-Simply subcalss the Config class.
-```python
-from ailab.experiment import Config
-class MyConfig(Config):
-    def __init__(self):
-        super().__init__()
-
-        self.train.batch_size = 42
-        #...
-        self.arch.model = MyModel
-        self.arch.loss = MyLoss
-        self.arch.metrics = MyMetrics
-        self.arch.prepare = MyDataset
-
-        # avoid errors during training -> check completeness
-        self.check_completness()  # preimplemented
-
-config = MyConfig()
-```
-
-## 3. Logging
-
-Keeping track of your configurations is done automatically once you setup the logging.
-It will copy all code from the current working directory to the log location where also your results will be stored.
-
-```python
-import ailab.experiment.logging as log
-log_dir = log.setup(config=config)
-```
-
-Logs can be visualized as well as images in the image folder in the log_dir.
-You can log the progress of your network to be shown in realtime with an eta in the server ui.
-
-```python
-import ailab.experiment.logging as log
-
-# Half way through
-log.update_progress(0.5)
-
-# We are done
-log.update_progress(1)
-```
-
-To log scalar values or images you can use the following.
-
-```python
-import ailab.experiment.logging as log
-
-# use matplotlib
-import matplotlib.pyplot as plt
-plt.plot(x, y, ...)
-log.log_image(name="MyFigure")  # outputs images/MyFigure.png
-# or for numpy arrays of shape (h,w,1) or (h,w,3)
-log.log_image(name="NumpyImage", data=my_image)  # outputs images/NumpyImage.png
-
-
-# log scalars
-log.log_value(name="loss", value=0.42, primary=True)  # Is shown on the front page
-log.log_value(name="mse", value=1.314)  # Is shown in the detail page
-```
-You can use custom scripts to use the visualization data or simply use the ailab server with it`s webgui.
-The server is capable of realtime visualization of the data.
-
-#### AI Lab Server
 AI Lab Visualization consists of a ui and a server.
 Since the ui is a static website that works on your local webbrowser no installation is needed. The static website is hosted [here](http://ailab.f-online.net/).
 
 Running is as simple as running the module in python providing a path to a config file.
 
 ```bash
-python -m ailab.visualization my_config.json
+ailab my_config.json
 ```
 
 A config file must contain a host or * for any interface, a port, a list of users as a map and a path to your checkpoints.
@@ -168,8 +37,13 @@ The gpu ids are equivalent to the numbers used for `CUDA_VISIBLE_DEVICES`.
   {
     "admin": "CHANGE_THIS"
   },
-  "workspace": "/data/$USER/experiments",
-  "auto_detect_experiments": true,
+  "workspace": "/home/$USER/Git",
+  "results": "/home/$USER/Results",
+  "queue": "/tmp/ailab_queue",
+  "auto_detect_experiments": false,
+  "projects": {
+
+  },
   "gpus": [0]
 }
 ```
