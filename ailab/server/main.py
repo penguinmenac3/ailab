@@ -23,7 +23,7 @@ def run_server(config_path: str) -> None:
     server.running = False
 
 
-if __name__ == "__main__":
+def main():
     import sys
     if len(sys.argv) > 1:
         run_server(sys.argv[1])

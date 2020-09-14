@@ -37,5 +37,10 @@ setup(
     author='Michael Fuerst',
     install_requires=install_requires,
     dependency_links=dependency_links,
-    author_email='mail@michaelfuerst.de'
+    author_email='mail@michaelfuerst.de',
+    entry_points={
+        'console_scripts': [
+            'ailab = ailab.server.main:main'
+        ]
+    }
 )
