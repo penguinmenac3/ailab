@@ -10,7 +10,7 @@ Furthermore, the server also provides a rempy host, where jobs can be submitted 
 1. Simply pip install this package from git:
 
 ```bash
-pip install git+https://github.com/penguinmenac3/ailab.git
+pip install ailab
 ```
 
 ## Running: AI Lab Server
