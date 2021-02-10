@@ -11,6 +11,7 @@ from threading import Thread
 from functools import partial
 import GPUtil
 import psutil
+import shutil
 from entangle.entanglement import Entanglement
 from ailab.server.terminal_emulator import open_terminal
 from rempy.server import Server as RempyServer
@@ -48,26 +49,60 @@ class Server(object):
         Run the server.
         """
         while self.running:
-            cpu = int(psutil.cpu_percent() * 10) / 10
-            ram = int(psutil.virtual_memory().percent * 10) / 10
-            gpus = [{"id": gpu.id, "GPU": int(gpu.load * 1000) / 10, "MEM": int(gpu.memoryUtil * 1000) / 10}
-                    for gpu in GPUtil.getGPUs()]
+            if "cluster" in self.config and self.config["cluster"]:
+                cpu = -1
+                ram = -1
+            else:
+                cpu = int(psutil.cpu_percent() * 10) / 10
+                ram = int(psutil.virtual_memory().percent * 10) / 10
+            if len(self.config["gpus"]) > 0:
+                gpus = [{"id": gpu.id, "GPU": int(gpu.load * 1000) / 10, "MEM": int(gpu.memoryUtil * 1000) / 10}
+                        for gpu in GPUtil.getGPUs() if gpu.id in self.config["gpus"]]
+            else:
+                gpus = []
             self.server_load = {"cpu": cpu, "ram": ram, "gpus": gpus}
 
             # Read experiment log and get latest event.
             for result_name in self.results:
+                garbage = False
                 log_fname = os.path.join(self.results[result_name], "ailab.log")
                 if not os.path.exists(log_fname):
                     log_fname = os.path.join(self.results[result_name], "log.txt")
                 if os.path.exists(log_fname):
                     with open(log_fname, "r") as f:
                         lines = f.readlines()
-                    event = lines[-1]
-                    event = json.loads(event)
+                    event = json.loads(lines[-1])
+                    if event["goal"] == "val" or event["goal"] == "train":
+                        event = json.loads(lines[-2])
+                    if "epoch" not in event:
+                        event["epoch"] = "-"
+                    event["dead"] = self.is_dead(event)
+                    if event["dead"] and (event["goal"].startswith("warmup") or event["goal"].startswith("waiting")):
+                        garbage = True
+                    if event["goal"].startswith("val ") or event["goal"].startswith("train "):
+                        phase, progress = event["goal"].split(" ")
+                        current_progress, max_progress = progress.split("/")
+                        event["epoch"] = progress
+                        event["goal"] = phase
+                        if event["dead"]:
+                            if int(current_progress) < 2:
+                                garbage = True
+                            if event["progress"] == 1.0 and int(max_progress) - int(current_progress) <= 1:
+                                event["goal"] = "done"
+                            else:
+                                event["goal"] = "dead"
+                            event["progress"] = 0
+                            event["eta"] = "-"
                     self.latest_result_events[result_name] = event
                 elif result_name in self.latest_result_events:
                     del self.latest_result_events[result_name]
+                if garbage:
+                    shutil.rmtree(self.results[result_name])
+                    del self.latest_result_events[result_name]
             sleep(2)
+
+    def is_dead(self, event):
+        return event["goal"] != "done" and datetime.datetime.fromisoformat(event["timestamp"]) < datetime.datetime.now() - datetime.timedelta(hours=1, minutes=30)
 
     def setup(self, state: Dict[str, Any], entanglement: Entanglement) -> None:
         """
